@@ -60,6 +60,7 @@ const Args = struct {
     exclude_repos: ?[]const u8 = null,
     exclude_langs: ?[]const u8 = null,
     exclude_private: bool = false,
+    exclude_inherited: bool = false,
     overview_output_file: ?[]const u8 = null,
     languages_output_file: ?[]const u8 = null,
     overview_template: ?[]const u8 = null,
@@ -590,6 +591,12 @@ pub fn main(init: std.process.Init) !void {
         if (glob.matchAny(exclude_repos orelse &.{}, repository.name) or
             (args.exclude_private and repository.private))
         {
+            continue;
+        }
+        const is_owned = !repository.fork and
+            std.mem.eql(u8, repository.owner_login, stats.user);
+        if (args.exclude_inherited and !is_owned) {
+            std.log.info("Skipping aggregate stats for unowned repository {s}", .{repository.name});
             continue;
         }
         aggregate_stats.stars += repository.stars;
