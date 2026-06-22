@@ -30,9 +30,12 @@ const Repository = struct {
     clones: u32,
     traffic: u32,
     private: bool,
+    fork: bool,
+    owner_login: []const u8,
 
     pub fn deinit(self: @This(), allocator: std.mem.Allocator) void {
         allocator.free(self.name);
+        allocator.free(self.owner_login);
         if (self.languages) |languages| {
             for (languages) |language| {
                 language.deinit(allocator);
@@ -63,7 +66,7 @@ const Repository = struct {
             self.lines_changed = 0;
             const authors = std.json.parseFromSliceLeaky(
                 []struct {
-                    author: struct { login: []const u8 },
+                    author: ?struct { login: []const u8 },
                     weeks: []struct {
                         a: u32,
                         d: u32,
@@ -83,7 +86,8 @@ const Repository = struct {
                 return response.status;
             };
             for (authors) |o| {
-                if (!std.mem.eql(u8, o.author.login, user)) {
+                const author = o.author orelse continue;
+                if (!std.mem.eql(u8, author.login, user)) {
                     continue;
                 }
                 for (o.weeks) |week| {
@@ -601,6 +605,8 @@ fn getReposByYear(
         \\          stargazerCount
         \\          forkCount
         \\          isPrivate
+        \\          isFork
+        \\          owner { login }
         \\          viewerPermission
         \\          languages(
         \\              first: 100,
@@ -658,6 +664,8 @@ fn getReposByYear(
                         stargazerCount: u32,
                         forkCount: u32,
                         isPrivate: bool,
+                        isFork: bool,
+                        owner: struct { login: []const u8 },
                         viewerPermission: []const u8,
                         languages: ?struct {
                             edges: ?[]struct {
@@ -727,9 +735,11 @@ fn getReposByYear(
         }
         var repository = Repository{
             .name = try context.allocator.dupe(u8, raw_repo.nameWithOwner),
+            .owner_login = try context.allocator.dupe(u8, raw_repo.owner.login),
             .stars = raw_repo.stargazerCount,
             .forks = raw_repo.forkCount,
             .private = raw_repo.isPrivate,
+            .fork = raw_repo.isFork,
             .languages = null,
             .views = 0,
             .clones = 0,
@@ -974,7 +984,7 @@ fn getLinesChanged(
             // If we're hitting rate limits on this API, just clone the repo
             // locally to compute lines changed
             // https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api?apiVersion=2026-03-10#rate-limit-errors
-            .accepted, .forbidden, .too_many_requests => {
+            .accepted, .forbidden, .too_many_requests, .no_content => {
                 item.timestamp =
                     std.Io.Clock.real.now(io).toSeconds() + item.delay;
                 // Note: this actually works way better with a very short delay,
