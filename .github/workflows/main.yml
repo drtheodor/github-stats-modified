@@ -52,7 +52,7 @@ jobs:
         IS_LOCAL: ${{ secrets.IS_LOCAL }}
         EXCLUDE_PRIVATE: "false"
         EXCLUDE_INHERITED: "true"
-        SILENT: "false"
+        SILENT: "true"
         # TODO: Remove this when they get their API working again
         # https://github.com/orgs/community/discussions/192970
         MAX_RETRIES: 5
